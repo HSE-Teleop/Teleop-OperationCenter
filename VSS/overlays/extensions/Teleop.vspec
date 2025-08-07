@@ -1,6 +1,0 @@
-Vehicle:
-  type: branch
-
-Vehicle.Teleop:
-  type: branch
-  description: Holds commands for teleoperation data.
