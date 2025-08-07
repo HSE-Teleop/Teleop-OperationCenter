@@ -21,7 +21,7 @@ fn main() {
 
 fn build_ui(app: &Application) {
     let window = ApplicationWindow::new(app);
-    window.set_title(Some("Hello"));
+    window.set_title(Some("Operation Center"));
     window.set_default_size(720, 480);
     
     window.present();

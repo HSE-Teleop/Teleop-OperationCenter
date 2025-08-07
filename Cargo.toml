@@ -4,16 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.5.38", features = ["derive"] }
-zenoh = "1.3.4"
-tokio = { version = "1.45.0", features = ["full"] }
-kuksa-rust-sdk = "0.1.2"
-rand = "0.8.5"
 gtk4 = "=0.10.0"
 gstreamer = "0.24.0"
-gstreamer-video = "0.24.0"
 gdk4 = "0.10.0"
-glib = "0.14"
-gstreamer-app = "0.20"
-gstreamer-video-sys = "0.20"
-gst-plugin-gtk4 = "0.14.0"
