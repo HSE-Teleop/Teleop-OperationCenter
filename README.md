@@ -9,8 +9,6 @@ This repository provides a minimal GUI for the vehicle and its control.
 
 ##
 
----
-
 ## Developing
 
 **For building and developing use the rust tool chain of Linux!**
