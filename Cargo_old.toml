@@ -9,8 +9,3 @@ gstreamer = "0.24.0"
 gdk4 = "0.10.0"
 glib = "0.20"
 gstreamer-video = "0.24"
-
-[lib]
-name = "gstgtk4"
-crate-type = ["cdylib", "rlib"]
-path = "src/lib.rs"

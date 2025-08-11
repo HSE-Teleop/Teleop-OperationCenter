@@ -16,7 +16,7 @@ This repository provides a minimal GUI for the vehicle and its control.
 **For building and developing use the rust tool chain of Linux!**
 
 This can be done by installing a Linux wsl when using Windows or other.
-To make sure the build is running through you need to install the following packages in your wsl or the Linux system your tool chain is running on:
+To make sure the build is running through, you need to install the following packages in your wsl or the Linux system your tool chain is running on:
 
 ```bash
   sudo apt install \
@@ -32,7 +32,7 @@ To make sure the build is running through you need to install the following pack
     pkg-config \
     build-essential
 ```
-If needed also install the necessary packages for GStreamer:
+If needed, also install the necessary packages for GStreamer:
 ```bash
   sudo apt install \
     libgstreamer1.0-dev \
