@@ -1,123 +1,103 @@
-use gtk4 as gtk;
-use gtk::prelude::*;
-use gdk4;
-use gtk4::Application;
-use glib;
+use eframe::{egui, App, Frame, NativeOptions};
 use gstreamer as gst;
-use gst::prelude::*;
-use gst::MessageView;
+use gstreamer_app as gst_app;
+use gstreamer_video as gst_video;
 
-fn main() {
-    // Init GStreamer first (must succeed)
-    gst::init().expect("Failed to initialize GStreamer");
-    gstgtk4::plugin_register_static().expect("Failed to register gstgtk4 plugin");
+use std::sync::{Arc, Mutex};
 
-    // Check required gstreamer plugins
-    ensure_plugins().expect("Missing GStreamer plugins");
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // GStreamer initialisieren
+    gst::init()?;
 
-    // Create GTK Application
-    let app = Application::builder()
-        .application_id("com.example.gstgtk4")
-        .build();
+    // Gemeinsamer Speicher für das aktuelle Videobild
+    let shared_frame: Arc<Mutex<Option<egui::ColorImage>>> = Arc::new(Mutex::new(None));
 
-    app.connect_activate(build_ui);
+    // Pipeline parsen und zu gst::Pipeline downcasten
+    let pipeline = gst::parse_launch(
+        "videotestsrc pattern=smpte95 \
+         ! videoconvert \
+         ! videoscale \
+         ! video/x-raw,format=RGBA \
+         ! appsink name=sink",
+    )?
+        .downcast::<gst::Pipeline>()?;
 
-    // Run the app
-    app.run();
-}
+    // appsink referenzieren und zu gst_app::AppSink casten
+    let appsink = pipeline
+        .by_name("sink")
+        .expect("appsink not found")
+        .downcast::<gst_app::AppSink>()
+        .expect("Element ist keine AppSink");
 
-fn build_ui(app: &Application) {
-    // Build UI
-    let window = gtk::ApplicationWindow::builder()
-        .application(app)
-        .title("GStreamer + GTK4 Paintable Sink")
-        .default_width(720)
-        .default_height(480)
-        .build();
+    // Closure erhält Zugriff auf den gemeinsamen Bildpuffer
+    let frame_clone = shared_frame.clone();
+    appsink.set_callbacks(
+        gst_app::AppSinkCallbacks::builder()
+            .new_sample(move |sink| {
+                // Rohdaten holen
+                let sample = sink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
+                let buffer = sample.buffer().ok_or(gst::FlowError::Error)?;
+                let map = buffer.map_readable().map_err(|_| gst::FlowError::Error)?;
 
-    // A Picture widget to host the Gdk Paintable from the sink
-    let picture = gtk::Picture::new();
-    window.set_child(Some(&picture));
-    window.present();
+                // Bildgröße ermitteln
+                let info = gst_video::VideoInfo::from_caps(sample.caps().unwrap()).unwrap();
+                let (w, h) = (info.width() as usize, info.height() as usize);
 
-    // Pipeline description (your UDP H264 receiver)
-    // Note: the caps string needs the inner quotes; we embed them inside Rust string.
-    let pipeline_description = concat!(
-        "udpsrc port=5000 caps=\"application/x-rtp,media=video,encoding-name=H264,payload=96\" ",
-        "! rtph264depay ! decodebin ! videoconvert ! gtk4paintablesink name=sink"
+                // In egui-Bild umwandeln
+                let img = egui::ColorImage::from_rgba_unmultiplied([w, h], map.as_slice());
+
+                // Im Shared State ablegen
+                *frame_clone.lock().unwrap() = Some(img);
+                Ok(gst::FlowSuccess::Ok)
+            })
+            .build(),
     );
 
-    // Build a pipeline from description
-    let element = gstreamer::parse::launch(pipeline_description)
-        .expect("Failed to parse pipeline description");
-    let pipeline = element
-        .downcast::<gst::Pipeline>()
-        .expect("Parsed element is not a Pipeline");
+    // Pipeline starten
+    pipeline.set_state(gst::State::Playing)?;
 
-    // Sanity check: is gtk4paintablesink available?
-    if gst::ElementFactory::find("gtk4paintablesink").is_none() {
-        eprintln!("ERROR: gtk4paintablesink element not found. Install the gst-plugin-gtk4 / gstreamer1.0-gtk4 package.");
-        // we still continue so the user can see the message in UI, but don't attempt to play
-        return;
-    }
+    // egui-Fenster starten
+    let app = VideoApp {
+        texture: None,
+        frame_store: shared_frame,
+    };
+    eframe::run_native(
+        "Teleop Control Center",
+        NativeOptions::default(),
+        Box::new(|_| Box::new(app)),
+    )?;
 
-    // Find the sink element by name and get its 'paintable' property
-    let sink = pipeline
-        .by_name("sink")
-        .expect("Couldn't find element named 'sink' in pipeline");
-
-    // The sink exports a Gdk Paintable (GObject) in property "paintable"
-    let paintable: gdk4::Paintable = sink.property("paintable");
-    picture.set_paintable(Some(&paintable));
-
-    // Watch the bus for errors / EOS and stop pipeline cleanly
-    let bus = pipeline.bus().expect("Pipeline without bus?");
-    let pipeline_weak = pipeline.downgrade();
-    // keep the guard alive for lifetime (must not be dropped)
-    let _bus_watch = bus
-        .add_watch_local(move |_bus, msg| {
-            match msg.view() {
-                MessageView::Eos(_) => {
-                    if let Some(p) = pipeline_weak.upgrade() {
-                        p.set_state(gst::State::Null).ok();
-                    }
-                    gtk4::glib::ControlFlow::Break
-                }
-                MessageView::Error(err) => {
-                    eprintln!(
-                        "GStreamer error from {:?}: {} ({:?})",
-                        err.src().map(|s| s.path_string()),
-                        err.error(),
-                        err.debug()
-                    );
-                    if let Some(p) = pipeline_weak.upgrade() {
-                        p.set_state(gst::State::Null).ok();
-                    }
-                    gtk4::glib::ControlFlow::Break
-                }
-                _ => gtk4::glib::ControlFlow::Continue,
-            }
-        })
-        .expect("Failed to add bus watch");
-
-    // Start playing
-    pipeline
-        .set_state(gst::State::Playing)
-        .expect("Unable to set pipeline to Playing state");
-
-    // Make sure pipeline is set to NULL on application shutdown
-    let pipeline_clone = pipeline.clone();
-    app.connect_shutdown(move |_| {
-        pipeline_clone.set_state(gst::State::Null).ok();
-    });
+    // Aufräumen
+    pipeline.set_state(gst::State::Null)?;
+    Ok(())
 }
 
-fn ensure_plugins() -> Result<(), String> {
-    if gst::ElementFactory::find("udpsrc").is_none() {
-        return Err("udpsrc element not found: install gstreamer1.0-plugins-good (or equivalent)".into());
+struct VideoApp {
+    texture: Option<egui::TextureHandle>,
+    frame_store: Arc<Mutex<Option<egui::ColorImage>>>,
+}
+
+impl App for VideoApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut Frame) {
+        // Neues Frame übernehmen
+        if let Some(img) = self.frame_store.lock().unwrap().take() {
+            match &self.texture {
+                Some(t) => t.set(img, egui::TextureOptions::NEAREST),
+                None => {
+                    self.texture = Some(
+                        ctx.load_texture("gst_frame", img, egui::TextureOptions::NEAREST),
+                    );
+                }
+            }
+        }
+
+        // Zeichnen
+        egui::CentralPanel::default().show(ctx, |ui| {
+            if let Some(tex) = &self.texture {
+                ui.image(tex.id(), tex.size_vec2());
+            } else {
+                ui.label("Kein Videostream …");
+            }
+        });
     }
-    if gst::ElementFactory::find("gtk4paintablesink").is_none() {
-        return Err("gtk4paintablesink element not found: install gstreamer1.0-gtk4 (or build gst-plugin-gtk4)".into());
-    }
-    Ok(())
 }

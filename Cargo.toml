@@ -1,16 +1,24 @@
 [package]
 name = "Teleop"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-gtk4 = "=0.10.0"
-gstreamer = "0.24.0"
-gdk4 = "0.10.0"
-glib = "0.20"
-gstreamer-video = "0.24"
+#egui               = "0.32.0"
+#eframe             = { version = "0.32.0", default-features = false, features = ["wgpu"] }
+gtk4                = "0.6"
+gdk4                = "0.6"
+gst-plugin-gtk4     = "0.10"          # GTK4 video sink plugin
 
-[lib]
-name = "gstgtk4"
-crate-type = ["cdylib", "rlib"]
-path = "src/lib.rs"
+gio                 = "0.14"            # optional, used by Application builder
+glib                = "0.14"
+
+gstreamer           = "0.20"
+gstreamer-video     = "0.20"
+gstreamer-app       = "0.20"
+
+
+#[lib]
+#name = "gstgtk4"
+#crate-type = ["cdylib", "rlib"]
+#path = "src/lib.rs"

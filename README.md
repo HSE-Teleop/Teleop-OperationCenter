@@ -25,7 +25,6 @@ To make sure the build is running through, you need to install the following pac
     libgdk-pixbuf-2.0-dev \
     libatk1.0-dev \
     libgraphene-1.0-dev \
-    libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     pkg-config \
     build-essential
