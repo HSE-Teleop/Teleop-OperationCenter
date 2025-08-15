@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # Docker registry
@@ -70,4 +70,4 @@ esac
 #printf '  %s\n' "${DOCKER_ARGS[@]}"
 
 # Run and drop into container (entrypoint or binary will run afterwards)
-exec docker run "${DOCKER_ARGS[@]}" "$IMAGE"
+exec docker run "${DOCKER_ARGS[@]}" --pull=always "$IMAGE"
