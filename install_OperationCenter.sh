@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-IMAGE="${IMAGE:-operation-center:latest}"
+# Docker registry
+IMAGE="ghcr.io/HSE-Teleop/Teleop-OperationCenter/operation-center:latest"
 NAME="${NAME:-operation-center}"
 GL_MODE="${GL_MODE:-dri3_off}"
 
@@ -11,10 +12,7 @@ XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR%/}"
 
 echo "==> Normalized XDG_RUNTIME_DIR='${XDG_RUNTIME_DIR:-<unset>}'"
 
-echo "==> Building image: $IMAGE"
-docker build -t "$IMAGE" .
-# Use with extra user
-#docker build --build-arg HOST_UID=$(id -u) --build-arg HOST_GID=$(id -g) -t "$IMAGE" .
+echo "==> Skip image build: $IMAGE"
 
 # Host-side quick diagnostics (helps spot permission/owner issues)
 if [ -n "$XDG_RUNTIME_DIR" ]; then

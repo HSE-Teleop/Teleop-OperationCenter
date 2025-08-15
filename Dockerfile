@@ -37,7 +37,6 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Update the local crate index
 RUN ~/.cargo/bin/cargo search
 
-
 # Install modern meson via pip (bypassing PEP 668)
 # RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade pip \
 #   && python3 -m pip install --no-cache-dir --break-system-packages 'meson>=1.1'
@@ -48,16 +47,14 @@ WORKDIR /usr/src/plugin
 
 RUN git clone https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git
 WORKDIR /usr/src/plugin/gst-plugins-rs
-# configure, build, install
-ENV PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH:-/usr/lib/x86_64-unknown-linux-gnu}"
+# Prevents Warning
+ARG PKG_CONFIG_PATH="/usr/lib/x86_64-unknown-linux-gnu"
+ENV PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH:-}"
 
+# configure, build, install
 RUN cargo install cargo-c
 RUN cargo cbuild -p gst-plugin-gtk4 --prefix=/usr/local \
   && cargo cinstall -p gst-plugin-gtk4 --prefix=/usr/local
-
-#RUN meson setup build --prefix=/usr/local \
-# && ninja -C build \
-# && ninja -C build install
 
 # Build OperationCenter
 WORKDIR /usr/src/app
@@ -78,7 +75,6 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
     ca-certificates gcc \
     # GStreamer runtime packages
-    dbus-x11 \
     gstreamer1.0-tools \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
@@ -97,6 +93,7 @@ RUN apt-get update \
         libx11-dev \
         libwayland-dev \
         libxkbcommon-dev \
+    dbus-x11 python3-gi \
     gir1.2-gtk-4.0 \
     libgtk-4-1 \
     libglib2.0-0 \
@@ -106,6 +103,12 @@ RUN apt-get update \
     libatspi2.0-0 \
     libepoxy0 \
     libwayland-client0 \
+    libwayland-cursor0 \
+    libwayland-egl1 \
+    libegl-mesa0 \
+    libgbm1 \
+    libdrm2 \
+    libxkbcommon0 \
  && rm -rf /var/lib/apt/lists/*
 
 # Copy Operation Center app
@@ -117,10 +120,19 @@ COPY --from=builder /usr/src/app/target/release/OperationCenter /usr/local/bin/O
 # Copy installed gst plugin files from builder's install location
 COPY --from=builder /usr/local /usr/local
 
+# Prevents warning
+ARG GST_PLUGIN_PATH="/usr/local/lib/x86_64-unknown-linux-gnu/debug"
 # Make sure GStreamer will look there
-ENV GST_PLUGIN_PATH="/usr/local/lib/gstreamer-1.0:${GST_PLUGIN_PATH:-/usr/local/lib/x86_64-unknown-linux-gnu/debug}"
+ENV GST_PLUGIN_PATH="/usr/local/lib/gstreamer-1.0:${GST_PLUGIN_PATH:-}"
 ENV GST_PLUGIN_PATH="/usr/local/lib:${GST_PLUGIN_PATH:-}"
 ENV GST_PLUGIN_PATH="/usr/local:${GST_PLUGIN_PATH:-}"
+
+# Add new user to bypass permission errors
+#ARG HOST_UID=1000
+#ARG HOST_GID=1000
+#RUN groupadd -g ${HOST_GID} appuser || true \
+# && useradd -m -u ${HOST_UID} -g ${HOST_GID} appuser || true
+#USER appuser
 
 # Set entrypoint
 ENTRYPOINT ["/usr/local/bin/OperationCenter"]

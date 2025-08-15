@@ -18,3 +18,5 @@ Get camera capture `v4l2-ctl -d /dev/video0 --list-formats-ext` </br>
 Then launch gstreamer (gst-launch1.0) in raw...
 
 New approach to make app with ['eframe'](gstreamer_visualization_rust.md) and maybe system calls to python.
+
+⇒ Not necessary
