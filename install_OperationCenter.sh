@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Docker registry
-IMAGE="ghcr.io/HSE-Teleop/Teleop-OperationCenter/operation-center:latest"
+IMAGE="ghcr.io/hse-teleop/teleop-operationcenter/operation-center:latest"
 NAME="${NAME:-operation-center}"
 GL_MODE="${GL_MODE:-dri3_off}"
 
