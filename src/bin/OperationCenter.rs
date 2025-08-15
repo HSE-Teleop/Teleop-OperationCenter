@@ -17,9 +17,57 @@ unsafe fn set_missing_env() {
     env::set_var("GST_PLUGIN_PATH", "/home/olbap/Teleop-OperationCenter/gst-plugins-rs/build");
 }
 
+
+fn create_ui(app: &Application) {
+    // Create main window
+    let window = ApplicationWindow::builder()
+        .application(app)
+        .title("Operation Center")
+        .default_width(800)
+        .default_height(600)
+        .build();
+
+    // Create an Image widget which will render a Paintable (the video sink provides it)
+    let image = Image::new();
+    window.set_child(Some(&image));
+
+    // Build a simple pipeline with a named sink:
+    // we use gtk4paintablesink which exposes a `paintable` property (GdkPaintable)
+    let pipeline_str = "videotestsrc pattern=ball ! videoconvert ! gtk4paintablesink name=mysink";
+    let parsed = gst::parse_launch(pipeline_str).expect("Failed to parse pipeline");
+    let pipeline = parsed
+        .downcast::<gst::Pipeline>()
+        .expect("Expected parsed pipeline to be a gst::Pipeline");
+
+    // Get the sink element by name:
+    let sink = pipeline
+        .by_name("mysink")
+        .expect("Could not find the gtk4paintablesink element (name=mysink)");
+
+    // Get the `paintable` property from the sink.
+    // This returns a gdk4::Paintable which GTK can render directly.
+    let paintable: Paintable = sink
+        .property::<Paintable>("paintable");
+    // .expect("Failed to get 'paintable' property from gtk4paintablesink");
+
+    // Attach paintable to the image widget
+    image.set_paintable(Some(&paintable));
+
+    // Show the window
+    window.present();
+
+    // Start playback
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to Playing");
+}
+
 fn main() {
-    unsafe { 
-        set_missing_env(); 
+    #[cfg(debug_assertions)]
+    { 
+        unsafe {
+            set_missing_env();
+        }
     }
     dump_env();
     
@@ -31,54 +79,62 @@ fn main() {
         .application_id("com.example.minmal")
         .build();
 
-    app.connect_activate(move |app| {
-        // Create main window
-        let window = ApplicationWindow::builder()
-            .application(app)
-            .title("Operation Center")
-            .default_width(800)
-            .default_height(600)
-            .build();
-
-        // Create an Image widget which will render a Paintable (the video sink provides it)
-        let image = Image::new();
-        window.set_child(Some(&image));
-
-        // Build a simple pipeline with a named sink:
-        // we use gtk4paintablesink which exposes a `paintable` property (GdkPaintable)
-        // Example pipeline: a test source -> convert -> gtk4paintablesink
-        let pipeline_str = "videotestsrc pattern=ball ! videoconvert ! gtk4paintablesink name=mysink";
-        // let pipeline_str = "videotestsrc pattern=ball ! videoconvert ! gtk4paintablesink name=mysink";
-        let parsed = gst::parse_launch(pipeline_str).expect("Failed to parse pipeline");
-        let pipeline = parsed
-            .downcast::<gst::Pipeline>()
-            .expect("Expected parsed pipeline to be a gst::Pipeline");
-
-        // Get the sink element by name:
-        let sink = pipeline
-            .by_name("mysink")
-            .expect("Could not find the gtk4paintablesink element (name=mysink)");
-
-        // Get the `paintable` property from the sink.
-        // This returns a gdk4::Paintable which GTK can render directly.
-        let paintable: Paintable = sink
-            .property::<Paintable>("paintable");
-            // .expect("Failed to get 'paintable' property from gtk4paintablesink");
-
-        // Attach paintable to the image widget
-        image.set_paintable(Some(&paintable));
-
-        // Show the window
-        window.present();
-
-        // Start playback
-        pipeline
-            .set_state(gst::State::Playing)
-            .expect("Unable to set the pipeline to Playing");
+    app.connect_activate( |app| {
+        create_ui(app);
     });
+    // app.connect_activate(move |app| {
+    //     // Create main window
+    //     let window = ApplicationWindow::builder()
+    //         .application(app)
+    //         .title("Operation Center")
+    //         .default_width(800)
+    //         .default_height(600)
+    //         .build();
+    // 
+    //     // Create an Image widget which will render a Paintable (the video sink provides it)
+    //     let image = Image::new();
+    //     window.set_child(Some(&image));
+    // 
+    //     // Build a simple pipeline with a named sink:
+    //     // we use gtk4paintablesink which exposes a `paintable` property (GdkPaintable)
+    //     // Example pipeline: a test source -> convert -> gtk4paintablesink
+    //     let pipeline_str = "videotestsrc pattern=ball ! videoconvert ! gtk4paintablesink name=mysink";
+    //     // let pipeline_str = "videotestsrc pattern=ball ! videoconvert ! gtk4paintablesink name=mysink";
+    //     let parsed = gst::parse_launch(pipeline_str).expect("Failed to parse pipeline");
+    //     let pipeline = parsed
+    //         .downcast::<gst::Pipeline>()
+    //         .expect("Expected parsed pipeline to be a gst::Pipeline");
+    // 
+    //     // Get the sink element by name:
+    //     let sink = pipeline
+    //         .by_name("mysink")
+    //         .expect("Could not find the gtk4paintablesink element (name=mysink)");
+    // 
+    //     // Get the `paintable` property from the sink.
+    //     // This returns a gdk4::Paintable which GTK can render directly.
+    //     let paintable: Paintable = sink
+    //         .property::<Paintable>("paintable");
+    //         // .expect("Failed to get 'paintable' property from gtk4paintablesink");
+    // 
+    //     // Attach paintable to the image widget
+    //     image.set_paintable(Some(&paintable));
+    // 
+    //     // Show the window
+    //     window.present();
+    // 
+    //     // Start playback
+    //     pipeline
+    //         .set_state(gst::State::Playing)
+    //         .expect("Unable to set the pipeline to Playing");
+    // });
 
     // Run the app
     // NOTE: pass command-line args so GTK can parse them
     let args: Vec<String> = env::args().collect();
     app.run_with_args(&args);
 }
+
+// // sender
+// // gst-launch-1.0 -v libcamerasrc ! x264enc tune=zerolatency speed-preset=ultrafast ! rtph264pay pt=96 ! udpsink host=<PC_IP> port=5000
+// // receiver
+// // gst-launch-1.0 -v udpsrc port=5000 caps="application/x-rtp,media=video,encoding-name=H264,payload=96" ! rtph264depay ! decodebin ! autovideosink

@@ -1,0 +1,9 @@
+services:
+  operation-center:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: operation-center
+    container_name: operation-center
+    environment:
+      - RUST_LOG=info,zenoh=debug,RUST_BACKTRACE=1
