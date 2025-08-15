@@ -18,6 +18,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+#    Pipeline executes if changes are made on the main branch, a pull request is made, or the branch name contains 'pipeline'
     if: contains(github.ref,'pipeline') || github.event_name == 'pull_request' || github.ref_name == 'main'
     
     steps:
