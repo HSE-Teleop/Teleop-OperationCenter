@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: operation-center
+    ports:
+      - "5000:5000/udp"
     container_name: operation-center
     environment:
       - RUST_LOG=info,zenoh=debug,RUST_BACKTRACE=1

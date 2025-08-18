@@ -33,7 +33,7 @@ DOCKER_ARGS=( --rm -it --name "$NAME" --user "$(id -u):$(id -g)" )
 [ -d /dev/shm ] && DOCKER_ARGS+=( -v /dev/shm:/dev/shm )
 
 # Additional mount (mount socket to allow GUI display)
-DOCKER_ARGS+=( -v /run/user/"$(id -u)"/"$WAYLAND_DISPLAY":/run/user/"$(id -u)"/"$WAYLAND_DISPLAY" )
+DOCKER_ARGS+=( -v /run/user/"$(id -u)"/"${WAYLAND_DISPLAY:-wayland-0}":/run/user/"$(id -u)"/"${WAYLAND_DISPLAY:-wayland-0}" )
 
 # Mount XDG_RUNTIME_DIR once (needed for wayland socket & dbus)
 if [ -n "$XDG_RUNTIME_DIR" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
@@ -70,4 +70,4 @@ esac
 #printf '  %s\n' "${DOCKER_ARGS[@]}"
 
 # Run and drop into container (entrypoint or binary will run afterwards)
-exec docker run "${DOCKER_ARGS[@]}" --pull=always "$IMAGE"
+exec docker run "${DOCKER_ARGS[@]}" -p 5000:5000/udp --pull=always "$IMAGE"

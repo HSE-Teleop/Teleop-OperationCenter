@@ -33,7 +33,12 @@ fn create_ui(app: &Application) {
 
     // Build a simple pipeline with a named sink:
     // we use gtk4paintablesink which exposes a `paintable` property (GdkPaintable)
-    let pipeline_str = "videotestsrc pattern=ball ! videoconvert ! gtk4paintablesink name=mysink";
+    // let pipeline_str = "videotestsrc pattern=ball ! videoconvert ! gtk4paintablesink name=mysink";
+    // let pipeline_str = "udpsrc address=0.0.0.0 port=5000 caps=\"application/x-rtp,media=video,encoding-name=JPEG,payload=26\" ! rtpjpegdepay ! jpegdec ! gtk4paintablesink name=mysink";
+    let pipeline_str = concat!(
+        "udpsrc address=0.0.0.0 port=5000 caps=\"application/x-rtp,media=video,encoding-name=JPEG,payload=26\" ",
+        "! rtpjitterbuffer ! rtpjpegdepay ! jpegdec ! videoconvert ! identity name=probe_id ! queue ! gtk4paintablesink name=mysink"
+    );
     let parsed = gst::parse_launch(pipeline_str).expect("Failed to parse pipeline");
     let pipeline = parsed
         .downcast::<gst::Pipeline>()
@@ -64,13 +69,13 @@ fn create_ui(app: &Application) {
 
 fn main() {
     #[cfg(debug_assertions)]
-    { 
+    {
         unsafe {
             set_missing_env();
         }
     }
     dump_env();
-    
+
     // Initialize GStreamer first (so GStreamer plugins are ready when GTK starts)
     gst::init().expect("Failed to initialize GStreamer");
 
@@ -82,7 +87,7 @@ fn main() {
     app.connect_activate( |app| {
         create_ui(app);
     });
-    
+
     // Run the app
     // NOTE: pass command-line args so GTK can parse them
     let args: Vec<String> = env::args().collect();

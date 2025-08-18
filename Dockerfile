@@ -134,5 +134,7 @@ ENV GST_PLUGIN_PATH="/usr/local:${GST_PLUGIN_PATH:-}"
 # && useradd -m -u ${HOST_UID} -g ${HOST_GID} appuser || true
 #USER appuser
 
+EXPOSE 5000
+
 # Set entrypoint
 ENTRYPOINT ["/usr/local/bin/OperationCenter"]
