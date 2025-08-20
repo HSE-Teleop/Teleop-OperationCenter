@@ -5,6 +5,58 @@ use gdk4::Paintable;
 use gstreamer as gst;
 use std::env;
 
+use zenoh::{bytes::Encoding, key_expr::KeyExpr, Config, Session};
+use zenoh::bytes::ZBytes;
+use zenoh::pubsub::{Publisher, Subscriber};
+
+pub struct Pub<'a> {
+    pub topic: String,
+    pub publisher: Publisher<'a>,
+}
+
+impl<'a> Pub<'a> {
+    pub async fn put<V: Into<ZBytes>>(&self, v: V) -> zenoh::Result<()> {
+        self.publisher.put(v).await
+    }
+}
+
+pub struct Sub<H> {
+    pub topic: String,
+    pub subscriber: Subscriber<H>,
+}
+
+const CONFIG: &str =
+    r#"{
+        "mode": "client",
+        "connect": {
+            "endpoints": ["tcp/zenoh:7447"],
+            "timeout_ms": -1,
+            "exit_on_failure": false
+        }
+    }"#;
+
+async fn init_zenoh() -> zenoh::Result<Session> {
+    zenoh::init_log_from_env_or("error");
+    let config = Config::from_json5(CONFIG)?;
+    
+    println!("Opening Zenoh session...");
+    zenoh::open(config).await
+}
+
+async fn declare_publishers<'a, S: AsRef<str>>(
+    session: &'a Session, 
+    topics: &[S]
+) -> zenoh::Result<Vec<Pub<'a>>> {
+    let mut pubs = Vec::with_capacity(topics.len());
+    for topic in topics {
+        println!("Declaring publisher: {}", topic);
+        let key = topic.as_ref().to_owned();
+        let p = session.declare_publisher(&key).await?;
+        pubs.push(Pub { topic: key, publisher: p});
+    }
+    Ok(pubs)
+}
+
 fn dump_env() {
     eprintln!("--- ENV DUMP START ---");
     for k in ["HOME","PATH","GST_PLUGIN_PATH","LD_LIBRARY_PATH","XDG_DATA_DIRS","GIO_EXTRA_MODULES","DISPLAY"].iter() {
@@ -66,8 +118,8 @@ fn create_ui(app: &Application) {
         .set_state(gst::State::Playing)
         .expect("Unable to set the pipeline to Playing");
 }
-
-fn main() {
+#[tokio::main]
+async fn main(){
     #[cfg(debug_assertions)]
     {
         unsafe {
@@ -92,6 +144,23 @@ fn main() {
     // NOTE: pass command-line args so GTK can parse them
     let args: Vec<String> = env::args().collect();
     app.run_with_args(&args);
+    
+    let session = init_zenoh().await.unwrap();
+    let topics = ["Vehicle/Teleop/EnginePower",
+                          "Vehicle/Teleop/SteeringAngle",
+                          "Vehicle/Teleop/ControlCounter",
+                          "Vehicle/Teleop/ControlTimestamp_ms",
+    ];
+    
+    let publishers = declare_publishers(&session, &topics).await.unwrap();
+    
+    if let Some(topic) = publishers
+        .iter()
+        .find(|topic| topic.topic == "Vehicle/Teleop/EnginePower") 
+    {
+        topic.put("42").await.unwrap();
+    }
+    
 }
 
 // // sender
