@@ -4,6 +4,7 @@ use gtk4::{Application, ApplicationWindow, Image};
 use gdk4::Paintable;
 use gstreamer as gst;
 use std::env;
+use flume::bounded;
 
 use zenoh::{bytes::Encoding, key_expr::KeyExpr, Config, Session};
 use zenoh::bytes::ZBytes;
@@ -23,6 +24,18 @@ impl<'a> Pub<'a> {
 pub struct Sub<H> {
     pub topic: String,
     pub subscriber: Subscriber<H>,
+}
+
+impl<H> Sub<H> {
+    pub async fn recv_value(&self) -> zenoh::Result<String> {
+        let sample = self.subscriber.recv_async().await?;
+        let s = sample
+            .payload()
+            .slices()
+            .map(|chunk| String::from_utf8_lossy(chunk).into_owned())
+            .collect::<String>();
+        Ok(s)
+    }
 }
 
 const CONFIG: &str =
@@ -55,6 +68,23 @@ async fn declare_publishers<'a, S: AsRef<str>>(
         pubs.push(Pub { topic: key, publisher: p});
     }
     Ok(pubs)
+}
+
+async fn declare_subscribers<S: AsRef<str>, H>(
+    session: &Session,
+    topics: &[S],
+) -> zenoh::Result<Vec<Sub<H>>> {
+    let mut subs = Vec::with_capacity(topics.len());
+    for topic in topics {
+        println!("Declaring subscriber: {}", topic);
+        let key = topic.as_ref().to_owned();
+        let s = session.
+            declare_subscriber(&key)
+            .with(bounded(32))
+            .await?;
+        subs.push(Sub { topic: key, subscriber: s, });
+    }
+    Ok(subs)
 }
 
 fn dump_env() {
@@ -119,7 +149,7 @@ fn create_ui(app: &Application) {
         .expect("Unable to set the pipeline to Playing");
 }
 #[tokio::main]
-async fn main(){
+async fn main() {
     #[cfg(debug_assertions)]
     {
         unsafe {
@@ -136,7 +166,7 @@ async fn main(){
         .application_id("com.example.minmal")
         .build();
 
-    app.connect_activate( |app| {
+    app.connect_activate(|app| {
         create_ui(app);
     });
 
@@ -144,23 +174,31 @@ async fn main(){
     // NOTE: pass command-line args so GTK can parse them
     let args: Vec<String> = env::args().collect();
     app.run_with_args(&args);
-    
+
     let session = init_zenoh().await.unwrap();
     let topics = ["Vehicle/Teleop/EnginePower",
-                          "Vehicle/Teleop/SteeringAngle",
-                          "Vehicle/Teleop/ControlCounter",
-                          "Vehicle/Teleop/ControlTimestamp_ms",
+        "Vehicle/Teleop/SteeringAngle",
+        "Vehicle/Teleop/ControlCounter",
+        "Vehicle/Teleop/ControlTimestamp_ms",
     ];
-    
+
     let publishers = declare_publishers(&session, &topics).await.unwrap();
-    
+
     if let Some(topic) = publishers
         .iter()
-        .find(|topic| topic.topic == "Vehicle/Teleop/EnginePower") 
+        .find(|topic| topic.topic == "Vehicle/Teleop/EnginePower")
     {
         topic.put("42").await.unwrap();
     }
-    
+
+    let subscribers = declare_subscribers(&session, &["Vehicle/Speed"]).await.unwrap();
+
+    if let Some(s) = subscribers
+        .iter()
+        .find(|s| s.topic == "Vehicle/Speed")
+    {
+        s.recv_value().await.unwrap();
+    }
 }
 
 // // sender

@@ -21,6 +21,7 @@ glib                = "0.14"
 gstreamer           = "0.20"
 gstreamer-video     = "0.20"
 gstreamer-app       = "0.20"
+flume = "0.11.1"
 
 
 #[lib]
