@@ -27,26 +27,21 @@ When using a wsl it should look something like this `\\wsl.localhost\Ubuntu\usr\
 ### Technologies
 
 We use Docker images to deploy the 'Operation Center'.
-We recommend using Docker Desktop and furthermore an Ubuntu wsl if not installed yet.
+We recommend using Docker Desktop, and furthermore, an Ubuntu wsl if it's not installed yet.
 If working with two distros make sure to use wsl2 in Docker and have docker cli (`sudo apt install docker-cli`) installed on the other wsl.
 
 ### WSL customization
 
 !!!
 
-Forward the used port for GStreamer to your wsl since wsl2 has its unique adapter with ip address.
-Execute the following on your host machine inside a powershell terminal to forward the port (in this case 5000 - also make sure to run in administration mode):
-`netsh interface portproxy add v4tov4 listenport=5000 listenaddress=0.0.0.0 connectport=5000 connectaddress=<your_wsl_ip>`
-
-Create a wsl config to set networking to mirrored. This file needs to be in your home directory under the host machine.</br>
-`.wslconfig`
-```text
-[wsl2]
-networkingMode=mirrored
-firewall=false       # Optional
-```
+UDP doesn't get forwarded to wsl (only tcp)
 
 !!!
+
+#### UDP Forwarding
+
+Use open-source [udp-forwarder](https://github.com/matthid/UdpPortForwarder).
+
 
 ## Camera
 

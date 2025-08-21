@@ -1,7 +1,7 @@
 # Builder stage: build plugin and rust app
 #FROM rust:1-slim-bookworm AS builder
 # Using custom rust image on Ubuntu because gtk4 somehow can not be found on debian
-FROM ubuntu AS builder
+FROM ubuntu:25.10 AS builder
 
 # Install system build deps + pip
 RUN apt-get update \

@@ -20,3 +20,10 @@ Then launch gstreamer (gst-launch-1.0) in raw...
 New approach to make app with ['eframe'](gstreamer_visualization_rust.md) and maybe system calls to python.
 
 ⇒ Not necessary
+
+Version control on dependencies images, ...
+
+ARM build
+
+
+PKG_CONFIG_PATH=gstreamer-gtk4 path

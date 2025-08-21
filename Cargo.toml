@@ -4,21 +4,21 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-#egui               = "0.32.0"
-#eframe             = { version = "0.32.0", default-features = false, features = ["wgpu"] }
-gtk4                = "0.6"
-gdk4                = "0.6"
-gst-plugin-gtk4     = "0.10"          # GTK4 video sink plugin
+gdk4 = "0.10.0"
+#gdk4 = "0.10.0"
 
-gio                 = "0.14"            # optional, used by Application builder
-glib                = "0.14"
+# GTK4 Rust bindings
+gtk4 = "0.10.0"
 
-gstreamer           = "0.20"
-gstreamer-video     = "0.20"
-gstreamer-app       = "0.20"
+# GStreamer Rust bindings: rename the crate to `gst` so your code can use `use gst::prelude::*;`
+#gst = { package = "gstreamer", version = "0.24" }
+gstreamer = "0.24.1"
+#gst-video = { package = "gstreamer-video", version = "0.24" }
+gstreamer-video = "0.24.1"
 
+# The gtk4 sink plugin (provides gtk4paintablesink which exposes a GdkPaintable)
+# Use the published gst-plugin-gtk4 crate (0.13.x is recent/stable in 2025).
+gst-plugin-gtk4 = "0.14.0"
 
-#[lib]
-#name = "gstgtk4"
-#crate-type = ["cdylib", "rlib"]
-#path = "src/lib.rs"
+# optional conveniences (uncomment if you use them in code)
+glib = "0.21"        # if you need lower-level GLib APIs
