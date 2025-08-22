@@ -3,28 +3,35 @@ name = "Teleop"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+gui = ["dep:gtk4", "dep:gdk4"]
+
 [dependencies]
 clap = { version = "4.5.38", features = ["derive"] }
 zenoh = "1.3.4"
 tokio = { version = "1.45.0", features = ["full"] }
 kuksa-rust-sdk = "0.1.2"
 rand = "0.8.5"
-#egui               = "0.32.0"
-#eframe             = { version = "0.32.0", default-features = false, features = ["wgpu"] }
-gtk4                = "0.6"
-gdk4                = "0.6"
-gst-plugin-gtk4     = "0.10"          # GTK4 video sink plugin
-
-gio                 = "0.14"            # optional, used by Application builder
-glib                = "0.14"
-
-gstreamer           = "0.20"
-gstreamer-video     = "0.20"
-gstreamer-app       = "0.20"
 flume = "0.11.1"
 
+gtk4 = { version = "0.6", optional = true }
+gdk4 = { version = "0.6", optional = true }
 
-#[lib]
-#name = "gstgtk4"
-#crate-type = ["cdylib", "rlib"]
-#path = "src/lib.rs"
+# Binaries
+[[bin]]
+name = "provider"
+path = "src/bin/provider.rs"
+
+[[bin]]
+name = "publisher"
+path = "src/bin/publisher.rs"
+
+[[bin]]
+name = "subscriber"
+path = "src/bin/subscriber.rs"
+
+[[bin]]
+name = "operation-center"
+path = "src/bin/operation_center.rs"
+required-features = ["gui"]

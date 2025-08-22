@@ -63,7 +63,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
 ENV PATH="/usr/local/bin:$PATH"
-RUN cargo build --release --bin OperationCenter
+RUN cargo build --release --bin OperationCenter --features gui --locked
 
 # Runtime image
 FROM ubuntu AS runtime-base
@@ -138,3 +138,26 @@ EXPOSE 5000
 
 # Set entrypoint
 ENTRYPOINT ["/usr/local/bin/OperationCenter"]
+# ---- Provider (bullseye) ----
+FROM rust:1.86-slim-bullseye AS provider-builder
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates build-essential \
+ && rm -rf /var/lib/apt/lists/*
+
+# Make sure pkg-config sees the usual dirs (often not needed, but avoids noise)
+ENV PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH:-}"
+
+WORKDIR /usr/src/provider
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+RUN cargo build --release --bin provider --no-default-features --locked
+
+# ---- Tiny runtime ----
+FROM debian:bullseye-slim AS provider
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=provider-builder /usr/src/provider/target/release/provider /usr/local/bin/provider
+ENTRYPOINT ["provider"]
