@@ -1,0 +1,65 @@
+name: OperationCenter
+
+on:
+  push:
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+    packages: write # Allows action to publish packages
+    
+env:
+  CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  REPOSITORY_NORMAL: ${{github.repository}}
+  IMAGE_NAME: operation-center
+  IMAGE_TAG_UBUNTU: ubuntu
+  IMAGE_TAG_ARM: arm
+  branch: ${{ github.ref }}
+
+jobs:
+  ubuntu_build:
+    runs-on: ubuntu:25.10
+    #    Pipeline executes if changes are made on the main branch, a pull request is made, or the branch name contains 'Pipeline'
+    if: contains(github.ref,'Pipeline') || github.event_name == 'pull_request' || github.ref_name == 'main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Downcase REPOSITORY
+      run: echo "REPOSITORY=${GITHUB_REPOSITORY@L}" >> "${GITHUB_ENV}"
+
+    - name: Building image
+      run: docker build -t $REGISTRY/$REPOSITORY/$IMAGE_NAME:$IMAGE_TAG_UBUNTU .
+
+    - name: Pushing image
+      run: docker push $REGISTRY/$REPOSITORY/$IMAGE_NAME:$IMAGE_TAG_UBUNTU
+
+  arm_build:
+    runs-on: linux/arm64 ubuntu:25.10
+    #    Pipeline executes if changes are made on the main branch, a pull request is made, or the branch name contains 'Pipeline'
+    if: contains(github.ref,'Pipeline') || github.event_name == 'pull_request' || github.ref_name == 'main'
+    
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Downcase REPOSITORY
+        run: echo "REPOSITORY=${GITHUB_REPOSITORY@L}" >> "${GITHUB_ENV}"
+
+      - name: Building image
+        run: docker build -t $REGISTRY/$REPOSITORY/$IMAGE_NAME:$IMAGE_TAG_ARM .
+
+      - name: Pushing image
+        run: docker push $REGISTRY/$REPOSITORY/$IMAGE_NAME:$IMAGE_TAG_ARM

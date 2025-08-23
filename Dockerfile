@@ -66,7 +66,7 @@ ENV PATH="/usr/local/bin:$PATH"
 RUN cargo build --release --bin OperationCenter
 
 # Runtime image
-FROM ubuntu AS runtime-base
+FROM ubuntu:25.10 AS runtime-base
 #FROM debian:bookworm-slim AS runtime-base
 
 #ENV DEBIAN_FRONTEND=noninteractive
