@@ -15,11 +15,12 @@ env:
   IMAGE_NAME: operation-center
   IMAGE_TAG_UBUNTU: ubuntu
   IMAGE_TAG_ARM: arm
+  branch: ${{ github.ref }}
 
 jobs:
   ubuntu_build:
     runs-on: ubuntu:25.10
-#    Pipeline executes if changes are made on the main branch, a pull request is made, or the branch name contains 'pipeline'
+    #    Pipeline executes if changes are made on the main branch, a pull request is made, or the branch name contains 'Pipeline'
     if: contains(github.ref,'Pipeline') || github.event_name == 'pull_request' || github.ref_name == 'main'
     
     steps:
@@ -42,7 +43,7 @@ jobs:
 
   arm_build:
     runs-on: linux/arm64 ubuntu:25.10
-    #    Pipeline executes if changes are made on the main branch, a pull request is made, or the branch name contains 'pipeline'
+    #    Pipeline executes if changes are made on the main branch, a pull request is made, or the branch name contains 'Pipeline'
     if: contains(github.ref,'Pipeline') || github.event_name == 'pull_request' || github.ref_name == 'main'
     
     steps:

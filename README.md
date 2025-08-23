@@ -17,30 +17,31 @@ In this section is everything described that needs to be done to work on this pr
 
 ### Rust toolchain
 
-To run and build Rust applications you need to install the Rust toolchain.
+To run and build Rust applications, you need to install the Rust toolchain.
 It is recommented to use the Linux toolchain for Rust. Therefore, install a wsl if not working on a Linux distribution.
 In there execute `sudo apt install cargo`.</br>
 Some IDEs find the path automatically others don't.
 If not, the most common path to the binaries is the `/usr/bin` directory.
-When using a wsl it should look something like this `\\wsl.localhost\Ubuntu\usr\bin`.
+When using a wsl, it should look something like this `\\wsl.localhost\Ubuntu\usr\bin`.
 
 ### Technologies
 
 We use Docker images to deploy the 'Operation Center'.
 We recommend using Docker Desktop, and furthermore, an Ubuntu wsl if it's not installed yet.
-If working with two distros make sure to use wsl2 in Docker and have docker cli (`sudo apt install docker-cli`) installed on the other wsl.
+If working with two distros make sure to use wsl2 in Docker and have Docker CLI (`sudo apt install docker-cli`) installed on the other wsl.
 
 ### WSL customization
 
 !!!
 
-UDP doesn't get forwarded to wsl (only tcp)
+UDP doesn't get forwarded to wsl (only TCP)
 
 !!!
 
 #### UDP Forwarding
 
-Use open-source [udp-forwarder](https://github.com/matthid/UdpPortForwarder).
+Use open-source [UDP-Forwarder](https://github.com/matthid/UdpPortForwarder).
+Has to run in the background to forward GStreamer pipeline via UDP to wsl and Docker.
 
 
 ## Camera
@@ -49,7 +50,7 @@ Camera access and resolution.
 
 ### Pi Cam
 
-For pi cams there is an extra library which allows simple and direct access (`sudo apt install -y libcamera-apps`).
+For pi cams there is an extra library that allows simple and direct access (`sudo apt install -y libcamera-apps`).
 
 
 ### USB Cams
@@ -94,14 +95,14 @@ Now you should be good to go.
 Run the `cargo build` command and search for the built file `.../target/debug/OperationCenter` in your Linux environment.</br>
 To execute the file run `./OperationCenter`. This should open a window.
 
-More simple way, just run the `run_wslg.sh` script to automatically build and run the application.
+More simple way, run the `run_wslg.sh` script to automatically build and run the application.
 
 ## Running/Deploying
 
 Here are the instructions to deploy and run the Operation Center.
 It is tested on a Windows machine using Docker and an Ubuntu wsl.
 
-Simply execute the `install_OperationCenter.sh` file inside the wsl.</br>
+Execute the `install_OperationCenter.sh` file inside the wsl.</br>
 This can be done by either cloning the repository or just the file from [GitHub](https://github.com/HSE-Teleop/Teleop-OperationCenter.git).
 When downloaded on your host machine search for the file in the mount directory (`/mnt/`) inside your wsl.
 

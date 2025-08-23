@@ -40,7 +40,9 @@ fn create_ui(app: &Application) {
     //     "! rtpjitterbuffer ! rtpjpegdepay ! jpegdec ! videoconvert ! identity name=probe_id ! queue ! gtk4paintablesink name=mysink"
     // );
 
-    // parse_launch (version 0.20.0), parse::launch (version 0.24.1)
+    // GStreamer: parse_launch (version 0.20.0), parse::launch (version 0.24.1)
+    // TODO: check if parse::launch is a better alternative (pipeline can then be easily passed via string)
+    // let parsed = gst::parse::launch(pipeline_str).expect("Failed to parse pipeline");
     let parsed = gst::parse_launch(pipeline_str).expect("Failed to parse pipeline");
     let pipeline = parsed
         .downcast::<gst::Pipeline>()
@@ -100,3 +102,4 @@ fn main() {
 // // gst-launch-1.0 -v libcamerasrc ! x264enc tune=zerolatency speed-preset=ultrafast ! rtph264pay pt=96 ! udpsink host=<PC_IP> port=5000
 // // receiver
 // // gst-launch-1.0 -v udpsrc port=5000 caps="application/x-rtp,media=video,encoding-name=H264,payload=96" ! rtph264depay ! decodebin ! autovideosink
+//                      udpsrc port=5000 caps=\"application/x-rtp,media=video,encoding-name=JPEG,payload=26\" ! rtpjpegdepay ! jpegdec ! gtk4paintablesink
