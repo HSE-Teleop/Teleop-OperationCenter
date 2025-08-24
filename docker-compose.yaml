@@ -10,6 +10,20 @@ services:
     environment:
       - RUST_LOG=info,zenoh=debug,RUST_BACKTRACE=1
 
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test
+    container_name: test
+    depends_on:
+      - zenoh
+      - databroker
+    environment:
+      - RUST_LOG=info,zenoh=debug,RUST_BACKTRACE=1
+    networks:
+      - kuksa
+
   zenoh:
     image: eclipse/zenoh:latest
     container_name: zenoh

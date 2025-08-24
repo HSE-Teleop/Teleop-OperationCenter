@@ -24,6 +24,10 @@ name = "provider"
 path = "src/bin/provider.rs"
 
 [[bin]]
+name = "test"
+path = "src/bin/test.rs"
+
+[[bin]]
 name = "publisher"
 path = "src/bin/publisher.rs"
 
@@ -32,6 +36,6 @@ name = "subscriber"
 path = "src/bin/subscriber.rs"
 
 [[bin]]
-name = "operation-center"
-path = "src/bin/operation_center.rs"
+name = "OperationCenter"
+path = "src/bin/OperationCenter.rs"
 required-features = ["gui"]
