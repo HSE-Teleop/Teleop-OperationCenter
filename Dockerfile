@@ -63,7 +63,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
 ENV PATH="/usr/local/bin:$PATH"
-RUN cargo build --release --bin OperationCenter
+RUN cargo build --release --bin OperationCenter --features gui
 
 # Runtime image
 FROM ubuntu:25.10 AS runtime-base
