@@ -1,11 +1,14 @@
 [package]
 name = "Teleop"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-gtk4 = "=0.10.0"
-gstreamer = "0.24.0"
-gdk4 = "0.10.0"
-glib = "0.20"
-gstreamer-video = "0.24"
+gtk4                = "0.6"
+gdk4                = "0.6"
+gst-plugin-gtk4     = "0.10"          # GTK4 video sink plugin
+
+gio                 = "0.14"            # Used by Application builder
+glib                = "0.14"
+
+gstreamer           = "0.20"

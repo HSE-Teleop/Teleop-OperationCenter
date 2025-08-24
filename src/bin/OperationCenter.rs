@@ -1,207 +1,299 @@
-use gstreamer::prelude::{ElementExt, GstBinExt};
-use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, Image};
-use gdk4::Paintable;
+mod utils;
+use utils::event_controller::register_key_controller;
+
+use gtk4 as gtk;
 use gstreamer as gst;
-use std::env;
-use flume::bounded;
 
-use zenoh::{bytes::Encoding, key_expr::KeyExpr, Config, Session};
-use zenoh::bytes::ZBytes;
-use zenoh::pubsub::{Publisher, Subscriber};
+use gst::prelude::*;
 
-pub struct Pub<'a> {
-    pub topic: String,
-    pub publisher: Publisher<'a>,
-}
+use gtk::prelude::*;
+use gtk::{gio};
 
-impl<'a> Pub<'a> {
-    pub async fn put<V: Into<ZBytes>>(&self, v: V) -> zenoh::Result<()> {
-        self.publisher.put(v).await
-    }
-}
+use std::cell::RefCell;
+use std::str::FromStr;
+use gdk4::Display;
+use gtk4::EventControllerKey;
 
-pub struct Sub<H> {
-    pub topic: String,
-    pub subscriber: Subscriber<H>,
-}
+fn create_ui(app: &gtk::Application) {
+    let pipeline = gst::Pipeline::new();
 
-impl<H> Sub<H> {
-    pub async fn recv_value(&self) -> zenoh::Result<String> {
-        let sample = self.subscriber.recv_async().await?;
-        let s = sample
-            .payload()
-            .slices()
-            .map(|chunk| String::from_utf8_lossy(chunk).into_owned())
-            .collect::<String>();
-        Ok(s)
-    }
-}
+    // let overlay = gst::ElementFactory::make("clockoverlay")
+    //     .property_from_str("halignment", &"right")
+    //     .property("font-desc", "Monospace 42")
+    //     .build()
+    //     .unwrap();
 
-const CONFIG: &str =
-    r#"{
-        "mode": "client",
-        "connect": {
-            "endpoints": ["tcp/zenoh:7447"],
-            "timeout_ms": -1,
-            "exit_on_failure": false
+    let gtksink = gst::ElementFactory::make("gtk4paintablesink")
+        .build()
+        .unwrap();
+
+    // Integrate GStreamer pipeline %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    // Simplify: use gtk4paintablesink directly as the sink element
+    let sink: gst::Element = gtksink.clone().upcast();
+
+    // --- create UDP RTP receiving elements ---
+    let src = gst::ElementFactory::make("udpsrc")
+        .name("udp_src")
+        .property("port", 5000i32)
+        .build()
+        .unwrap();
+
+    // prefer a capsfilter rather than setting caps property on udpsrc directly
+    let rtp_caps = gst::Caps::from_str(
+        "application/x-rtp,media=video,encoding-name=H264,payload=96"
+    ).unwrap();
+    let capsfilter = gst::ElementFactory::make("capsfilter")
+        .name("rtp_caps")
+        .property("caps", &rtp_caps)
+        .build()
+        .unwrap();
+
+    let rtph264depay = gst::ElementFactory::make("rtph264depay")
+        .name("rtp_h264_depay")
+        .build()
+        .unwrap();
+
+    // `h264parse` is recommended between depay and decodebin for robust parsing
+    let h264parse = gst::ElementFactory::make("h264parse")
+        .name("h264_parse")
+        .build()
+        .unwrap();
+
+    // decodebin will create dynamic src pads we must link when they appear
+    let decodebin = gst::ElementFactory::make("decodebin")
+        .name("decoder")
+        .build()
+        .unwrap();
+
+    // queue between decodebin and overlay to avoid blocking and for threading separation
+    let queue = gst::ElementFactory::make("queue")
+        .name("decode_queue")
+        .build()
+        .unwrap();
+    // Füge videoconvert als statisches Element nach der queue hinzu
+    let videoconvert = gst::ElementFactory::make("videoconvert")
+        .name("videoconvert_post")
+        .build()
+        .unwrap();
+
+    // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    // Ensure all elements, including queue, are added to the pipeline (pipeline, overlay, videoconvert, sink)
+    pipeline.add_many(&[&src, &capsfilter, &rtph264depay, &h264parse, &decodebin, &queue, &videoconvert, &sink]).unwrap();
+
+    // link the static part: udpsrc -> capsfilter -> rtph264depay -> h264parse -> decodebin
+    gst::Element::link_many(&[&src, &capsfilter, &rtph264depay, &h264parse, &decodebin])
+        .expect("Failed to link UDP -> depay -> parse -> decodebin");
+
+    // Own approach: static link queue -> overlay -> videoconvert -> sink
+    // queue.link(&overlay).expect("Failed to link queue -> overlay");
+    queue.link(&videoconvert).expect("Failed to link queue -> overlay");
+    // overlay.link(&videoconvert).expect("Failed to link overlay -> videoconvert");
+    videoconvert.link(&sink).expect("Failed to link videoconvert -> sink");
+
+    // --- dynamic pad linking: decodebin -> queue (when decodebin exposes a new src pad) ---
+    let queue_weak = queue.downgrade();
+
+    decodebin.connect_pad_added(move |_, src_pad| {
+        // only handle video pads
+        let caps = match src_pad.current_caps().or_else(|| Option::from(src_pad.query_caps(None))) {
+            Some(c) => c,
+            None => return,
+        };
+        let s = match caps.structure(0) {
+            Some(s) => s,
+            None => return,
+        };
+        let name = s.name();
+
+        if !name.starts_with("video/") {
+            // ignore audio or other pads
+            return;
         }
-    }"#;
 
-async fn init_zenoh() -> zenoh::Result<Session> {
-    zenoh::init_log_from_env_or("error");
-    let config = Config::from_json5(CONFIG)?;
-    
-    println!("Opening Zenoh session...");
-    zenoh::open(config).await
-}
+        // upgrade queue
+        let queue = match queue_weak.upgrade() {
+            Some(q) => q,
+            None => return,
+        };
 
-async fn declare_publishers<'a, S: AsRef<str>>(
-    session: &'a Session, 
-    topics: &[S]
-) -> zenoh::Result<Vec<Pub<'a>>> {
-    let mut pubs = Vec::with_capacity(topics.len());
-    for topic in topics {
-        println!("Declaring publisher: {}", topic);
-        let key = topic.as_ref().to_owned();
-        let p = session.declare_publisher(&key).await?;
-        pubs.push(Pub { topic: key, publisher: p});
-    }
-    Ok(pubs)
-}
-
-async fn declare_subscribers<S: AsRef<str>, H>(
-    session: &Session,
-    topics: &[S],
-) -> zenoh::Result<Vec<Sub<H>>> {
-    let mut subs = Vec::with_capacity(topics.len());
-    for topic in topics {
-        println!("Declaring subscriber: {}", topic);
-        let key = topic.as_ref().to_owned();
-        let s = session.
-            declare_subscriber(&key)
-            .with(bounded(32))
-            .await?;
-        subs.push(Sub { topic: key, subscriber: s, });
-    }
-    Ok(subs)
-}
-
-fn dump_env() {
-    eprintln!("--- ENV DUMP START ---");
-    for k in ["HOME","PATH","GST_PLUGIN_PATH","LD_LIBRARY_PATH","XDG_DATA_DIRS","GIO_EXTRA_MODULES","DISPLAY"].iter() {
-        eprintln!("{:20} = {:?}", k, env::var(k));
-    }
-    eprintln!("--- ENV DUMP END ---");
-}
-
-unsafe fn set_missing_env() {
-    env::set_var("GST_PLUGIN_PATH", "/home/olbap/Teleop-OperationCenter/gst-plugins-rs/build");
-}
-
-
-fn create_ui(app: &Application) {
-    // Create main window
-    let window = ApplicationWindow::builder()
-        .application(app)
-        .title("Operation Center")
-        .default_width(800)
-        .default_height(600)
-        .build();
-
-    // Create an Image widget which will render a Paintable (the video sink provides it)
-    let image = Image::new();
-    window.set_child(Some(&image));
-
-    // Build a simple pipeline with a named sink:
-    // we use gtk4paintablesink which exposes a `paintable` property (GdkPaintable)
-    // let pipeline_str = "videotestsrc pattern=ball ! videoconvert ! gtk4paintablesink name=mysink";
-    // let pipeline_str = "udpsrc address=0.0.0.0 port=5000 caps=\"application/x-rtp,media=video,encoding-name=JPEG,payload=26\" ! rtpjpegdepay ! jpegdec ! gtk4paintablesink name=mysink";
-    let pipeline_str = concat!(
-        "udpsrc address=0.0.0.0 port=5000 caps=\"application/x-rtp,media=video,encoding-name=JPEG,payload=26\" ",
-        "! rtpjitterbuffer ! rtpjpegdepay ! jpegdec ! videoconvert ! identity name=probe_id ! queue ! gtk4paintablesink name=mysink"
-    );
-    let parsed = gst::parse_launch(pipeline_str).expect("Failed to parse pipeline");
-    let pipeline = parsed
-        .downcast::<gst::Pipeline>()
-        .expect("Expected parsed pipeline to be a gst::Pipeline");
-
-    // Get the sink element by name:
-    let sink = pipeline
-        .by_name("mysink")
-        .expect("Could not find the gtk4paintablesink element (name=mysink)");
-
-    // Get the `paintable` property from the sink.
-    // This returns a gdk4::Paintable which GTK can render directly.
-    let paintable: Paintable = sink
-        .property::<Paintable>("paintable");
-    // .expect("Failed to get 'paintable' property from gtk4paintablesink");
-
-    // Attach paintable to the image widget
-    image.set_paintable(Some(&paintable));
-
-    // Show the window
-    window.present();
-
-    // Start playback
-    pipeline
-        .set_state(gst::State::Playing)
-        .expect("Unable to set the pipeline to Playing");
-}
-#[tokio::main]
-async fn main() {
-    #[cfg(debug_assertions)]
-    {
-        unsafe {
-            set_missing_env();
+        // if the queue sink pad is already linked, don't try again
+        let queue_sink = queue.static_pad("sink").expect("queue must have sink pad");
+        if queue_sink.is_linked() {
+            // already linked, probably another video stream - ignore
+            return;
         }
-    }
-    dump_env();
 
-    // Initialize GStreamer first (so GStreamer plugins are ready when GTK starts)
-    gst::init().expect("Failed to initialize GStreamer");
-
-    // Build a GTK Application
-    let app = Application::builder()
-        .application_id("com.example.minmal")
-        .build();
-
-    app.connect_activate(|app| {
-        create_ui(app);
+        match src_pad.link(&queue_sink) {
+            Ok(_) => {
+                println!("Linked decodebin src pad to queue sink");
+            }
+            Err(err) => {
+                eprintln!("Failed to link decodebin pad to queue: {:?}", err);
+            }
+        }
     });
 
-    // Run the app
-    // NOTE: pass command-line args so GTK can parse them
-    let args: Vec<String> = env::args().collect();
-    app.run_with_args(&args);
+    let window = gtk::ApplicationWindow::new(app);
+    window.set_default_size(640, 480);
 
-    let session = init_zenoh().await.unwrap();
-    let topics = ["Vehicle/Teleop/EnginePower",
-        "Vehicle/Teleop/SteeringAngle",
-        "Vehicle/Teleop/ControlCounter",
-        "Vehicle/Teleop/ControlTimestamp_ms",
-    ];
+    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
-    let publishers = declare_publishers(&session, &topics).await.unwrap();
+    let gst_widget = gstgtk4::RenderWidget::new(&gtksink);
+    vbox.append(&gst_widget);
 
-    if let Some(topic) = publishers
-        .iter()
-        .find(|topic| topic.topic == "Vehicle/Teleop/EnginePower")
-    {
-        topic.put("42").await.unwrap();
+    // Label to show the current position (add if needed)
+    let label = gtk::Label::new(Some("Position: 00:00:00"));
+    // vbox.append(&label);
+    
+    // Add controls
+    let controls = gtk::Grid::builder()
+        .row_spacing(6)
+        .column_spacing(6)
+        .row_homogeneous(true)
+        .column_homogeneous(true)
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
+        .build();
+
+    let btn_up = gtk::Button::builder()
+        .icon_name("go-up-symbolic")
+        .tooltip_text("Up")
+        .build();
+    let btn_left = gtk::Button::builder()
+        .icon_name("go-previous-symbolic")
+        .tooltip_text("Left")
+        .build();
+    let btn_right = gtk::Button::builder()
+        .icon_name("go-next-symbolic")
+        .tooltip_text("Right")
+        .build();
+    let btn_down = gtk::Button::builder()
+        .icon_name("go-down-symbolic")
+        .tooltip_text("Down")
+        .build();
+
+    // Optional: Click handler
+    btn_up.connect_clicked(|_| println!("Arrow: Up"));
+    btn_left.connect_clicked(|_| println!("Arrow: Left"));
+    btn_right.connect_clicked(|_| println!("Arrow: Right"));
+    btn_down.connect_clicked(|_| println!("Arrow: Down"));
+
+    controls.attach(&btn_up,    1, 0, 1, 1);
+    controls.attach(&btn_left,  0, 1, 1, 1);
+    controls.attach(&btn_right, 2, 1, 1, 1);
+    controls.attach(&btn_down,  1, 1, 1, 1);
+    let css = r#"
+        .arrow {
+            transition: 100ms ease-in-out;
+        }
+        .arrow.active {
+            background-color: alpha(@theme_selected_bg_color, 0.4);
+            box-shadow: inset 0 0 0 2px @theme_selected_bg_color;
+        }
+    "#;
+    let provider = gtk::CssProvider::new();
+    provider.load_from_data(css);
+    if let Some(display) = Display::default() {
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
     }
+    btn_up.add_css_class("arrow");
+    btn_left.add_css_class("arrow");
+    btn_right.add_css_class("arrow");
+    btn_down.add_css_class("arrow");
+    vbox.append(&controls);
 
-    let subscribers = declare_subscribers(&session, &["Vehicle/Speed"]).await.unwrap();
+    window.set_child(Some(&vbox));
+    window.present();
+    // Register event handler
+    let key_controller = EventControllerKey::new();
+    register_key_controller(&key_controller, app.clone(), controls.clone());
+    window.add_controller(key_controller);
 
-    if let Some(s) = subscribers
-        .iter()
-        .find(|s| s.topic == "Vehicle/Speed")
-    {
-        s.recv_value().await.unwrap();
-    }
+    app.add_window(&window);
+
+    let pipeline_weak = pipeline.downgrade();
+    let timeout_id = glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
+        let Some(pipeline) = pipeline_weak.upgrade() else {
+            return glib::ControlFlow::Break;
+        };
+
+        let position = pipeline.query_position::<gst::ClockTime>();
+        label.set_text(&format!("Position: {:.0}", position.display()));
+        glib::ControlFlow::Continue
+    });
+
+    let bus = pipeline.bus().unwrap();
+
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+
+    let app_weak = app.downgrade();
+    let bus_watch = bus
+        .add_watch_local(move |_, msg| {
+            use gst::MessageView;
+
+            let Some(app) = app_weak.upgrade() else {
+                return glib::ControlFlow::Break
+            };
+
+            match msg.view() {
+                MessageView::Eos(..) => app.quit(),
+                MessageView::Error(err) => {
+                    println!(
+                        "Error from {:?}: {} ({:?})",
+                        err.src().map(|s| s.path_string()),
+                        err.error(),
+                        err.debug()
+                    );
+                    app.quit();
+                }
+                _ => (),
+            };
+
+            glib::ControlFlow::Continue
+        })
+        .expect("Failed to add bus watch");
+
+    let timeout_id = RefCell::new(Some(timeout_id));
+    let pipeline = RefCell::new(Some(pipeline));
+    let bus_watch = RefCell::new(Some(bus_watch));
+    app.connect_shutdown(move |_| {
+        window.close();
+
+        drop(bus_watch.borrow_mut().take());
+        if let Some(pipeline) = pipeline.borrow_mut().take() {
+            pipeline
+                .set_state(gst::State::Null)
+                .expect("Unable to set the pipeline to the `Null` state");
+        }
+
+        if let Some(timeout_id) = timeout_id.borrow_mut().take() {
+            timeout_id.remove();
+        }
+    });
 }
 
-// // sender
-// // gst-launch-1.0 -v libcamerasrc ! x264enc tune=zerolatency speed-preset=ultrafast ! rtph264pay pt=96 ! udpsink host=<PC_IP> port=5000
-// // receiver
-// // gst-launch-1.0 -v udpsrc port=5000 caps="application/x-rtp,media=video,encoding-name=H264,payload=96" ! rtph264depay ! decodebin ! autovideosink
+fn main() -> glib::ExitCode {
+    gst::init().unwrap();
+    gtk::init().unwrap();
+
+    gstgtk4::plugin_register_static().expect("Failed to register gstgtk4 plugin");
+
+    let app = gtk::Application::new(None::<&str>, gio::ApplicationFlags::FLAGS_NONE);
+
+    app.connect_activate(create_ui);
+    let res = app.run();
+
+    unsafe {
+        gst::deinit();
+    }
+
+    res
+}

@@ -6,35 +6,45 @@ on:
     branches: [ "main" ]
 
 permissions:
-    packages: write # Allows action to publish packages
-    
+  contents: read
+  packages: write
+
 env:
-  CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  REPOSITORY_NORMAL: ${{github.repository}}
   IMAGE_NAME: operation-center
   IMAGE_TAG: latest
 
 jobs:
-  build:
+  build-and-push:
+    # Try to use the same version as in the Dockerfile
     runs-on: ubuntu-latest
-#    Pipeline executes if changes are made on the main branch, a pull request is made, or the branch name contains 'pipeline'
-    if: contains(github.ref,'pipeline') || github.event_name == 'pull_request' || github.ref_name == 'main'
-    
+
+    #    Pipeline executes if changes are made on the main branch, a pull request is made, or the branch name contains 'Pipeline'
+    if: contains(github.ref,'Pipeline') || github.event_name == 'pull_request' || github.ref_name == 'main'
+
     steps:
-    - uses: actions/checkout@v4
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v1
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Downcase REPOSITORY
-      run: echo "REPOSITORY=${GITHUB_REPOSITORY@L}" >> "${GITHUB_ENV}"
+      - uses: actions/checkout@v4
 
-    - name: Building image
-      run: docker build -t $REGISTRY/$REPOSITORY/$IMAGE_NAME:$IMAGE_TAG .
+      - name: Downcast REPOSITORY
+        run: echo "REPOSITORY=${GITHUB_REPOSITORY@L}" >> "${GITHUB_ENV}"
 
-    - name: Pushing image
-      run: docker push $REGISTRY/$REPOSITORY/$IMAGE_NAME:$IMAGE_TAG
+      - name: Log in to ghcr
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU (for emulation)
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}

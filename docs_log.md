@@ -100,3 +100,21 @@ With that setup we can customize the 'docker run' command so that the app can co
 The corresponding [script](run_wslg.sh) then needs to be executed inside the wsl with the necessary environment variables.
 
 The script uses the wayland socket and mounts it through the docker container to the wsl.
+
+## GStreamer forwarding
+
+*Not needed just for logging purpose*
+
+---
+
+Forward the used port for GStreamer to your wsl since wsl2 has its unique adapter with ip address.
+Execute the following on your host machine inside a powershell terminal to forward the port (in this case 5000 - also make sure to run in administration mode):
+`netsh interface portproxy add v4tov4 listenport=5000 listenaddress=0.0.0.0 connectport=5000 connectaddress=<your_wsl_ip>`
+
+Create a wsl config to set networking to mirrored. This file needs to be in your home directory under the host machine.</br>
+`.wslconfig`
+```text
+[wsl2]
+networkingMode=mirrored
+firewall=false       # Optional
+```
