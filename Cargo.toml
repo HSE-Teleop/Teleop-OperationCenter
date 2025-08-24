@@ -3,12 +3,14 @@ name = "Teleop"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-gdk4 = "0.10.0"
-#gdk4 = "0.10.0"
+[features]
+default = []
+gui = ["dep:gtk4", "dep:gdk4"]
 
+[dependencies]
+gdk4 = { version = "0.10.0", optional = true }
 # GTK4 Rust bindings
-gtk4 = "0.10.0"
+gtk4 = { version = "0.10.0", optional = true }
 
 # GStreamer Rust bindings: rename the crate to `gst` so your code can use `use gst::prelude::*;`
 #gst = { package = "gstreamer", version = "0.24" }
@@ -22,3 +24,9 @@ gst-plugin-gtk4 = "0.14.0"
 
 # optional conveniences (uncomment if you use them in code)
 glib = "0.21"        # if you need lower-level GLib APIs
+
+# Binaries
+[[bin]]
+name = "OperationCenter"
+path = "src/bin/OperationCenter.rs"
+required-features = ["gui"]
