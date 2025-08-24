@@ -1,9 +1,11 @@
 use std::cell::OnceCell;
+use std::sync::Arc;
 use gdk4::{Key, ModifierType};
 use gdk4::prelude::*;
-use glib::Propagation;
+use glib::{MainContext, Propagation};
 use gtk4::{Application, Button, EventControllerKey, Grid};
 use gtk4::prelude::{GridExt, WidgetExt};
+use crate::utils::zenoh_utils::{Pub, Sub};
 
 thread_local! {
     static EVENT_PARAMETERS: OnceCell<EventParameters> = OnceCell::new();
@@ -12,24 +14,31 @@ thread_local! {
 struct EventParameters {
     pub app: Application,
     pub controls: Grid,
+    // zenoh parameters
+    pub publishers: Arc<Vec<Pub<'static>>>, 
+    pub subscribers: Arc<Vec<Sub>>
     // Add more parameters here if needed
 }
 impl EventParameters {
-    pub fn new(app: Application, controls: Grid) -> EventParameters {
+    pub fn new(app: Application, controls: Grid, publishers: Arc<Vec<Pub<'static>>>, subscribers: Arc<Vec<Sub>>) -> EventParameters {
         println!("Registered EventParameters!");
         EventParameters {
             app,
-            controls,
+            controls, 
+            publishers,
+            subscribers
         }
     }
 }
 
 /// Implement functionality and pass extra arguments here to abstract the code.
-pub fn register_key_controller(key_controller: &EventControllerKey, app: Application, controls: Grid) -> &EventControllerKey {
+pub fn register_key_controller<'a>(key_controller: &'a EventControllerKey, app: Application, controls: Grid, publishers: Arc<Vec<Pub<'static>>>, subscribers: Arc<Vec<Sub>>) -> &'a EventControllerKey {
     EVENT_PARAMETERS.with(|cell| {
         let _ = cell.set(EventParameters::new(
-            app.clone(),
-            controls.clone()
+            app,
+            controls,
+            publishers,
+            subscribers
         ));
     });
 
@@ -117,10 +126,32 @@ fn space_handler() -> Propagation {
 fn forward_handler(released: bool) -> Propagation {
     let handled = EVENT_PARAMETERS.with(|cell| {
         if let Some(params) = cell.get() {
-            // TODO: forward movement
             println!("Move forward");
             let btn: Button = params.controls.child_at(1, 0).unwrap().downcast().expect("Downcast to button failed");
-            if released {remove_active_class(&btn);}else{add_active_class(&btn);}
+            if released {
+                remove_active_class(&btn);
+                // TODO: 0.1 steps while holding and -0.1 steps when released
+                let pubs = Arc::clone(&params.publishers);
+                MainContext::default().spawn_local(async move {
+                    if let Some(p) = pubs.iter().find(|p| p.topic == "Vehicle/Teleop/EnginePower") {
+                        if let Err(e) = p.put("0").await {
+                            eprintln!("put failed: {e}");
+                        }
+                    }
+                });
+            }else{
+                remove_active_class(&btn);
+                add_active_class(&btn);
+                // Configure zenoh publisher here
+                let pubs = Arc::clone(&params.publishers);
+                MainContext::default().spawn_local(async move {
+                    if let Some(p) = pubs.iter().find(|p| p.topic == "Vehicle/Teleop/EnginePower") {
+                        if let Err(e) = p.put("10").await {
+                            eprintln!("put failed: {e}");
+                        }
+                    }
+                });
+            }
             true
         } else {
             false
@@ -136,10 +167,14 @@ fn forward_handler(released: bool) -> Propagation {
 fn left_handler(released: bool) -> Propagation {
     let handled = EVENT_PARAMETERS.with(|cell| {
         if let Some(params) = cell.get() {
-            // TODO: left movement
             println!("Move left");
             let btn: Button = params.controls.child_at(0, 1).unwrap().downcast().expect("Downcast to button failed");
-            if released {remove_active_class(&btn);}else{add_active_class(&btn);}
+            if released {
+                remove_active_class(&btn);
+            }else{
+                remove_active_class(&btn);
+                add_active_class(&btn);
+            }
             true
         } else {
             false
@@ -155,10 +190,14 @@ fn left_handler(released: bool) -> Propagation {
 fn backwards_handler(released: bool) -> Propagation {
     let handled = EVENT_PARAMETERS.with(|cell| {
         if let Some(params) = cell.get() {
-            // TODO: backwards movement
             println!("Move backwards");
             let btn: Button = params.controls.child_at(1, 1).unwrap().downcast().expect("Downcast to button failed");
-            if released {remove_active_class(&btn);}else{add_active_class(&btn);}
+            if released {
+                remove_active_class(&btn);
+            }else{
+                remove_active_class(&btn);
+                add_active_class(&btn);
+            }
             true
         } else {
             false
@@ -174,10 +213,14 @@ fn backwards_handler(released: bool) -> Propagation {
 fn right_handler(released: bool) -> Propagation {
     let handled = EVENT_PARAMETERS.with(|cell| {
         if let Some(params) = cell.get() {
-            // TODO: right movement
             println!("Move right");
             let btn: Button = params.controls.child_at(2, 1).unwrap().downcast().expect("Downcast to button failed");
-            if released {remove_active_class(&btn);}else{add_active_class(&btn);}
+            if released {
+                remove_active_class(&btn);
+            }else{
+                remove_active_class(&btn);
+                add_active_class(&btn);
+            }
             true
         } else {
             false

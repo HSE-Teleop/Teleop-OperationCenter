@@ -5,6 +5,7 @@ use zenoh::bytes::ZBytes;
 use zenoh::pubsub::{Publisher, Subscriber};
 use zenoh::sample::Sample;
 
+#[derive(Debug)]
 pub struct Pub<'a> {
     pub topic: String,
     pub publisher: Publisher<'a>,
@@ -39,6 +40,7 @@ impl<'a> Pub<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct Sub {
     pub topic: String,
     pub subscriber: Subscriber<Receiver<Sample>>,
@@ -85,15 +87,14 @@ const CONFIG: &str = r#"{
     }
 }"#;
 
-async fn init_zenoh() -> zenoh::Result<Session> {
-    // Keep zenoh's own logging quiescent by default; change to "info" or "debug" when needed.
+pub async fn init_zenoh() -> zenoh::Result<Session> {
     zenoh::init_log_from_env_or("error");
     let config = Config::from_json5(CONFIG)?;
     println!("Opening Zenoh session...");
     zenoh::open(config).await
 }
 
-async fn declare_publishers<'a, S: AsRef<str>>(
+pub async fn declare_publishers<'a, S: AsRef<str>>(
     session: &'a Session,
     topics: &[S],
 ) -> zenoh::Result<Vec<Pub<'a>>> {
@@ -107,7 +108,7 @@ async fn declare_publishers<'a, S: AsRef<str>>(
     Ok(pubs)
 }
 
-async fn declare_subscribers<S: AsRef<str>>(
+pub async fn declare_subscribers<S: AsRef<str>>(
     session: &Session,
     topics: &[S],
 ) -> zenoh::Result<Vec<Sub>> {
@@ -123,31 +124,31 @@ async fn declare_subscribers<S: AsRef<str>>(
     }
     Ok(subs)
 }
-
-#[tokio::main]
-async fn main() {
-    let session = init_zenoh().await.unwrap();
-
-    let topics = [
-        "Vehicle/Teleop/EnginePower",
-        "Vehicle/Teleop/SteeringAngle",
-        "Vehicle/Teleop/ControlCounter",
-        "Vehicle/Teleop/ControlTimestamp_ms",
-    ];
-
-    let publishers = declare_publishers(&session, &topics).await.unwrap();
-
-    if let Some(topic) = publishers
-        .iter()
-        .find(|topic| topic.topic == "Vehicle/Teleop/EnginePower")
-    {
-        
-        topic.put("10").await.unwrap();
-    }
-
-    let subscribers = declare_subscribers(&session, &["Vehicle/Speed"]).await.unwrap();
-
-    if let Some(s) = subscribers.iter().find(|s| s.topic == "Vehicle/Speed") {
-        let _value = s.recv_value().await.unwrap();
-    }
-}
+// 
+// #[tokio::main]
+// async fn main() {
+//     let session = init_zenoh().await.unwrap();
+// 
+//     let topics = [
+//         "Vehicle/Teleop/EnginePower",
+//         "Vehicle/Teleop/SteeringAngle",
+//         "Vehicle/Teleop/ControlCounter",
+//         "Vehicle/Teleop/ControlTimestamp_ms",
+//     ];
+// 
+//     let publishers = declare_publishers(&session, &topics).await.unwrap();
+// 
+//     if let Some(topic) = publishers
+//         .iter()
+//         .find(|topic| topic.topic == "Vehicle/Teleop/EnginePower")
+//     {
+//         
+//         topic.put("10").await.unwrap();
+//     }
+// 
+//     let subscribers = declare_subscribers(&session, &["Vehicle/Speed"]).await.unwrap();
+// 
+//     if let Some(s) = subscribers.iter().find(|s| s.topic == "Vehicle/Speed") {
+//         let _value = s.recv_value().await.unwrap();
+//     }
+// }

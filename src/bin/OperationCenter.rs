@@ -11,10 +11,12 @@ use gtk::{gio};
 
 use std::cell::RefCell;
 use std::str::FromStr;
+use std::sync::Arc;
 use gdk4::Display;
-use gtk4::EventControllerKey;
+use gtk4::{EventControllerKey};
+use crate::utils::zenoh_utils::{declare_publishers, declare_subscribers, init_zenoh, Pub, Sub};
 
-fn create_ui(app: &gtk::Application) {
+fn create_ui(app: &gtk::Application, publishers: Arc<Vec<Pub<'static>>>, subscribers: Arc<Vec<Sub>>) {
     let pipeline = gst::Pipeline::new();
 
     // let overlay = gst::ElementFactory::make("clockoverlay")
@@ -212,7 +214,7 @@ fn create_ui(app: &gtk::Application) {
     window.present();
     // Register event handler
     let key_controller = EventControllerKey::new();
-    register_key_controller(&key_controller, app.clone(), controls.clone());
+    register_key_controller(&key_controller, app.clone(), controls.clone(), publishers.clone(), subscribers.clone());
     window.add_controller(key_controller);
 
     app.add_window(&window);
@@ -280,7 +282,8 @@ fn create_ui(app: &gtk::Application) {
     });
 }
 
-fn main() -> glib::ExitCode {
+#[tokio::main]
+async fn main() -> glib::ExitCode {
     gst::init().unwrap();
     gtk::init().unwrap();
 
@@ -288,7 +291,30 @@ fn main() -> glib::ExitCode {
 
     let app = gtk::Application::new(None::<&str>, gio::ApplicationFlags::FLAGS_NONE);
 
-    app.connect_activate(create_ui);
+    // Init zenoh
+    let session = init_zenoh().await.unwrap();
+    let topics = [
+        "Vehicle/Teleop/EnginePower",
+        "Vehicle/Teleop/SteeringAngle",
+        "Vehicle/Teleop/ControlCounter",
+        "Vehicle/Teleop/ControlTimestampMs",
+    ];
+    let session: &'static zenoh::Session = Box::leak(Box::new(session));
+    let publishers = declare_publishers(&session, &topics).await.unwrap();
+    let subscribers = declare_subscribers(&session, &["Vehicle/Speed"]).await.unwrap();
+
+    // Wrap in Arcs so that caching is later possible
+    let publishers = Arc::new(publishers);
+    let subscribers = Arc::new(subscribers);
+
+    app.connect_activate({
+        let publishers = Arc::clone(&publishers);
+        let subscribers = Arc::clone(&subscribers);
+        move |app| {
+            create_ui(app, Arc::clone(&publishers), Arc::clone(&subscribers));
+        }
+    });
+    // TODO: Look for sub thread to handle zenoh messages
     let res = app.run();
 
     unsafe {
